@@ -84,12 +84,168 @@
       .replace(/[^\p{L}\p{N}]+/gu, "");
   }
   const page = () => document.body.dataset.page;
+  const JARGON = {
+    "*": [
+      "未收到本人确认",
+      "无正式退房记录",
+      "外部联系上升",
+      "同行关联持续",
+      "不建议换线",
+      "个人换线",
+      "临时换站",
+      "计划换站",
+      "夜间深清",
+      "提前结束行程",
+      "提前返程",
+      "提前离团",
+      "等待复核",
+      "状态同步",
+      "后勤交接",
+      "客户自定义字段",
+      "活体交接记录",
+      "仍有呼吸",
+      "成人形运输袋",
+      "换线",
+      "换站",
+      "深清",
+      "余味席",
+    ],
+    index: ["安全确认逾期", "已确认本人状态正常", "团体住宿确认"],
+    life: [
+      "商业合作内容",
+      "合作内容说明",
+      "素材授权",
+      "报名来源码",
+      "渠道码",
+      "内容合作中心",
+      "遗留物品统一清理",
+    ],
+    qian: [
+      "自由活动",
+      "路线调整",
+      "个人安排",
+      "临时提前退出",
+      "私人安排",
+    ],
+    "qian-archive": [
+      "版本差异",
+      "成员服务摘要",
+      "目的地字段未填写",
+      "风险标记",
+      "路线修订",
+    ],
+    forum: ["项目调整", "返程安排", "项目方已处理", "本人原因"],
+    hotel: [
+      "房务事件摘要",
+      "住客状态",
+      "正式退房",
+      "团体房态",
+      "B2服务区",
+      "B2 SERVICE",
+      "夜间房务",
+      "活体处置",
+      "成人长度包裹",
+      "禁止前台回退",
+      "暂挂",
+      "只读摘要",
+    ],
+    restaurant: [
+      "余味",
+      "晚场小桌",
+      "后场预备",
+      "预备摘要",
+      "预备量",
+      "内部结算",
+    ],
+    news: [
+      "私人原因",
+      "未发现关联",
+      "无证据显示",
+      "网络讨论",
+      "公开附件缓存",
+    ],
+    insurance: [
+      "安全确认",
+      "确认逾期",
+      "已登记设备",
+      "投递记录",
+      "境外协助",
+      "最后已知地点",
+      "人工核验",
+    ],
+    nightpost: ["历史客户查询", "区域夜间供应链", "夜间交接", "活体"],
+    "nightpost-query": [
+      "历史合作查询",
+      "当前记录",
+      "交接区域",
+      "活动迹象",
+      "约束带重新固定",
+      "等待换站",
+      "处理完成",
+      "只读",
+    ],
+  };
+  function jargonPattern() {
+    const terms = [...new Set([...(JARGON["*"] || []), ...(JARGON[page()] || [])])]
+      .sort((a, b) => b.length - a.length)
+      .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    return terms.length ? new RegExp(terms.join("|"), "gi") : null;
+  }
   function rich(x = "") {
-    return esc(x);
+    const pattern = jargonPattern();
+    return pattern
+      ? esc(x).replace(
+          pattern,
+          (match) => `<strong class="lexeme"><em>${match}</em></strong>`,
+        )
+      : esc(x);
+  }
+  function decorateJargon() {
+    const root = $(".site-window"),
+      pattern = jargonPattern();
+    if (!root || !pattern || !document.createTreeWalker) return;
+    const walker = document.createTreeWalker(
+        root,
+        window.NodeFilter?.SHOW_TEXT || 4,
+      ),
+      nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach((node) => {
+      const parent = node.parentElement,
+        value = node.nodeValue || "";
+      if (
+        !parent ||
+        !pattern.test(value) ||
+        parent.closest(".lexeme, script, style, textarea, input, option, code, pre")
+      ) {
+        pattern.lastIndex = 0;
+        return;
+      }
+      pattern.lastIndex = 0;
+      const fragment = document.createDocumentFragment();
+      let cursor = 0;
+      for (const match of value.matchAll(pattern)) {
+        fragment.append(document.createTextNode(value.slice(cursor, match.index)));
+        const strong = document.createElement("strong"),
+          em = document.createElement("em");
+        strong.className = "lexeme";
+        em.textContent = match[0];
+        strong.append(em);
+        fragment.append(strong);
+        cursor = match.index + match[0].length;
+      }
+      fragment.append(document.createTextNode(value.slice(cursor)));
+      node.replaceWith(fragment);
+      pattern.lastIndex = 0;
+    });
   }
   let narrativeCache;
   function narrative() {
     if (narrativeCache) return narrativeCache;
+    if (D.narrativeV3) {
+      narrativeCache = D.narrativeV3;
+      return narrativeCache;
+    }
     try {
       const bytes = Uint8Array.from(atob(D.narrativePayload || ""), (c) =>
         c.charCodeAt(0),
@@ -224,9 +380,14 @@
     supper: "assets/img/menu-night.webp",
     flight: "assets/img/airport-wing.webp",
     cold: "assets/img/nightpost-cold.webp",
-    "room-712-incident": "assets/img/room-712-incident.webp",
-    "b2-corridor-incident": "assets/img/b2-corridor-incident.webp",
-    "nightpost-handover": "assets/img/nightpost-handover.webp",
+    "life-corridor-anomaly": "assets/img/life-corridor-anomaly.webp",
+    "room-712-incident": "assets/img/room-712-incident-v2.webp",
+    "b2-corridor-incident": "assets/img/b2-corridor-incident-v2.webp",
+    "nightpost-handover": "assets/img/nightpost-handover-v2.webp",
+    "window-day5-figure": "assets/img/window-day5-figure.webp",
+    "ending-rescue": "assets/img/ending-rescue.webp",
+    "ending-expose": "assets/img/ending-expose.webp",
+    "ending-qian": "assets/img/ending-qian.webp",
     "window-day2": "assets/img/window-day2.webp",
     "coast-workshop.jpg": "assets/img/coast-workshop.webp",
     "forum-market.jpg": "assets/img/forum-market.webp",
@@ -252,12 +413,22 @@
     supper: "拾味晚场烛光餐桌",
     flight: "旅行途中从舷窗看到的夕阳云海",
     cold: "NIGHTPOST冷链仓储空间",
+    "life-corridor-anomaly":
+      "海隅生活旧活动照片：712房门前的房务车与覆盖成人轮廓的白色床单",
     "room-712-incident":
-      "白潮旧房务系统中的712房夜间附件：空房、黄色行李箱与房务车",
+      "白潮旧房务系统712房附件：未带走的黄色行李箱、单只拖鞋与成人长度灰色包裹",
     "b2-corridor-incident":
-      "白潮旧房务系统中的B2后勤附件：带约束带的服务车、湿轮迹与开启的货梯",
+      "白潮B2后勤附件：三只成人长度运输袋，其中一只从内部压出清晰手形",
     "nightpost-handover":
-      "NIGHTPOST交接附件：黄色行李箱与封闭转运袋同时停在夜间货台",
+      "NIGHTPOST交接附件：黄色行李箱与仍有活动迹象的成人运输袋",
+    "window-day5-figure":
+      "林沅DAY5窗户照片：窗边站着一名手持黑色约束带的酒店员工",
+    "ending-rescue":
+      "救援现场附件：B2金属门被打开，运输袋旁留下急救设备和黄色行李箱",
+    "ending-expose":
+      "新闻现场照片：冷链车后门打开，车内多层货架放着数只成人长度运输袋",
+    "ending-qian":
+      "DAY6窗户照片：没有窗户的冷藏室、门内侧抓痕、黄色鸭子和单只拖鞋",
     "window-day2": "DAY2老城民宿窗外的海与街区",
     "coast-workshop.jpg": "旅友圈用户上传的海岸街区摄影返图",
     "forum-market.jpg": "旅友圈用户上传的旧城街道旅行照片",
@@ -280,6 +451,9 @@
         cls.includes("handover") ||
         cls.includes("ending-photo");
     return `<figure class="photo-frame">${inspectable ? `<a class="attachment-open" href="${PHOTO[key]}" target="_blank" rel="noopener" aria-label="查看原始附件：${esc(PHOTO_ALT[key])}">${image}</a>` : image}<figcaption>${esc(PHOTO_ALT[key])}</figcaption></figure>`;
+  }
+  function finalPacket() {
+    return `<section class="final-packet"><header><b>自动附带的已核实资料</b><span>6项 · 无须手动填写</span></header><dl><div><dt>旅行人</dt><dd>林沅 / 保单 ${esc(D.insurance.policy)}</dd></div><div><dt>最后本人联系</dt><dd>08月19日21:38</dd></div><div><dt>住宿</dt><dd>白潮酒店712 / 未办理正式退房</dd></div><div><dt>当前位置</dt><dd>酒店B2冷藏前室</dd></div><div><dt>运输记录</dt><dd>NP-LY-B12 / 活体</dd></div><div><dt>计划出场</dt><dd>08月21日00:20</dd></div></dl><p>附件：712房务照片、B2处置照片、NIGHTPOST称重交接图、当前操作日志、林沅未发送草稿。</p></section>`;
   }
 
   const host = {
@@ -321,8 +495,129 @@
   function browser() {
     const hist = (S.history || []).slice(1, 7),
       tabs = (S.tabs || []).slice(-6);
-    return `<div class="browser-chrome"><div class="browser-tabs">${tabs.map((x) => `<a class="browser-tab ${x.p === page() ? "active" : ""}" href="${x.u}" data-browser-tab="1"><span>${esc(x.t)}</span>${x.p === page() ? "<i></i>" : ""}</a>`).join("")}<span class="browser-plus" title="新标签页">＋</span></div><div class="browser-toolbar"><button class="browser-control" id="browserBack" aria-label="后退">‹</button><button class="browser-control" id="browserForward" aria-label="前进">›</button><button class="browser-control" id="browserReload" aria-label="刷新">↻</button><div class="address-bar"><span class="lockmark">▣</span><span>${esc(currentUrl())}</span></div><details class="browser-history"><summary>历史</summary><div>${hist.length ? hist.map((x) => `<a href="${x.u}"><b>${esc(x.t)}</b><span>${esc(x.u)}</span></a>`).join("") : "<span>暂无最近浏览</span>"}</div></details><a class="browser-search-link" href="search.html" aria-label="搜索网页">⌕</a><form id="chromeSearch" class="chrome-search"><input id="globalQ" aria-label="全站搜索" value="${esc(qs("q") || "")}" placeholder="搜索网页"><button>搜索</button></form></div></div>`;
+    return `<div class="browser-chrome"><div class="browser-tabs">${tabs.map((x) => `<div class="browser-tab-item ${x.p === page() ? "active" : ""}"><a class="browser-tab ${x.p === page() ? "active" : ""}" href="${x.u}" data-browser-tab="1"><span>${esc(x.t)}</span>${x.p === page() ? "<i></i>" : ""}</a><button class="browser-tab-close" type="button" data-close-tab="${esc(x.p)}" aria-label="关闭标签：${esc(x.t)}" title="关闭标签">×</button></div>`).join("")}<span class="browser-plus" title="新标签页">＋</span></div><div class="browser-toolbar"><button class="browser-control" id="browserBack" aria-label="后退">‹</button><button class="browser-control" id="browserForward" aria-label="前进">›</button><button class="browser-control" id="browserReload" aria-label="刷新">↻</button><div class="address-bar"><span class="lockmark">▣</span><span>${esc(currentUrl())}</span></div><details class="browser-history"><summary>历史</summary><div>${hist.length ? hist.map((x) => `<a href="${x.u}"><b>${esc(x.t)}</b><span>${esc(x.u)}</span></a>`).join("") : "<span>暂无最近浏览</span>"}</div></details><button class="browser-support" id="browserSupport" type="button" aria-label="支持作者1元" title="支持作者 1元"><span>￥</span><b>支持</b></button><a class="browser-search-link" href="search.html" aria-label="搜索网页">⌕</a><form id="chromeSearch" class="chrome-search"><input id="globalQ" aria-label="全站搜索" value="${esc(qs("q") || "")}" placeholder="搜索网页"><button>搜索</button></form></div></div>`;
   }
+  const SUPPORT_PAID_KEY = "good_weather_support_v1",
+    SUPPORT_PROMPT_KEY = "good_weather_support_prompt_v1";
+  function supportToast(message) {
+    const old = $("#supportToast");
+    if (old) old.remove();
+    const toast = document.createElement("div");
+    toast.id = "supportToast";
+    toast.className = "support-toast";
+    toast.setAttribute("role", "status");
+    toast.textContent = message;
+    document.body.append(toast);
+    setTimeout(() => toast.classList.add("show"), 30);
+    setTimeout(() => {
+      toast.classList.remove("show");
+      setTimeout(() => toast.remove(), 350);
+    }, 3000);
+  }
+  function supportHasPaid() {
+    try {
+      return !!STORE.getItem(SUPPORT_PAID_KEY);
+    } catch {
+      return false;
+    }
+  }
+  function hideSupport() {
+    const overlay = $("#supportOverlay");
+    if (!overlay) return;
+    overlay.classList.add("closing");
+    overlay.classList.remove("show");
+    document.documentElement.classList.remove("support-open");
+    setTimeout(() => overlay.remove(), 380);
+  }
+  function markSupport() {
+    try {
+      STORE.setItem(SUPPORT_PAID_KEY, String(Date.now()));
+      STORE.setItem(SUPPORT_PROMPT_KEY, "1");
+    } catch {
+      // The thanks state is optional; the game remains fully playable.
+    }
+    hideSupport();
+    supportToast("谢谢你。海边那扇还亮着的窗口，会继续留在这里。");
+  }
+  function showSupport(silentIfPaid = false) {
+    if (supportHasPaid()) {
+      if (!silentIfPaid) supportToast("已经记下你的支持，谢谢你。以后的故事还会继续。");
+      return;
+    }
+    try {
+      STORE.setItem(SUPPORT_PROMPT_KEY, "1");
+    } catch {
+      // A missing prompt marker may only cause the optional layer to reappear.
+    }
+    const existing = $("#supportOverlay");
+    if (existing) {
+      existing.classList.add("show");
+      document.documentElement.classList.add("support-open");
+      return;
+    }
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<div class="support-overlay" id="supportOverlay" role="dialog" aria-modal="true" aria-labelledby="supportTitle"><div class="support-card"><button class="support-close" id="supportClose" type="button" aria-label="关闭支持窗口" title="关闭">×</button><div class="support-card-inner"><header class="support-header"><div><span>♡</span><h2 id="supportTitle">支持《一路好天气》</h2><span>♡</span></div><p>1元自愿支持 · 不影响完整游玩</p></header><div class="support-body"><div class="support-qr"><img src="assets/img/paycode.png" alt="abc studio 收款码"><i></i></div><p class="support-scan">请使用 <strong>某宝</strong> 扫码支持1元</p><div class="support-copy"><p><b>你好，我是 abc studio 的独立开发者。</b></p><p>为了让这次失联不像一串任务，我反复改过每封邮件、每条旧帖和每一个看似普通的网页。如果你愿意支持1元，它会成为下一部作品继续被写下去的一点时间。</p><p class="support-cute">1块钱买不到一瓶海边的盐汽水，但能让下一页旧网页继续亮着。</p><p>感谢你愿意读到这里，也感谢每一次没有催促答案、而是停下来记住一个名字的浏览。</p></div></div><footer class="support-footer"><p>清除浏览器数据后，自动弹出记录也会被清除。</p><div><button class="support-done" id="supportDone" type="button">已完成支持 ♡</button><button class="support-later" id="supportLater" type="button">下次一定</button></div><small>abc studio</small></footer></div></div></div>`,
+    );
+    const overlay = $("#supportOverlay"),
+      close = $("#supportClose"),
+      later = $("#supportLater"),
+      done = $("#supportDone"),
+      animate = window.requestAnimationFrame || ((fn) => setTimeout(fn, 0));
+    close.onclick = hideSupport;
+    later.onclick = hideSupport;
+    done.onclick = markSupport;
+    overlay.onclick = (event) => {
+      if (event.target === overlay) hideSupport();
+    };
+    document.documentElement.classList.add("support-open");
+    animate(() => animate(() => overlay.classList.add("show")));
+    close.focus();
+  }
+  function maybeAutoSupport() {
+    if (supportHasPaid() || STORE.getItem(SUPPORT_PROMPT_KEY)) return;
+    const milestones = [
+        "mail:shared-itinerary",
+        "mail:window-memory",
+        "mail:luggage",
+        "life:l01",
+        "qian:archive",
+      ],
+      detailedReads = S.visits.filter((visitKey) => !visitKey.endsWith(":home"));
+    if (
+      !milestones.some((visitKey) => S.visits.includes(visitKey)) &&
+      detailedReads.length < 2
+    )
+      return;
+    setTimeout(() => {
+      if (supportHasPaid() || STORE.getItem(SUPPORT_PROMPT_KEY)) return;
+      STORE.setItem(SUPPORT_PROMPT_KEY, "1");
+      showSupport(true);
+    }, 900);
+  }
+  window.GoodWeatherSupport = {
+    show: () => showSupport(false),
+    hide: hideSupport,
+    hasPaid: supportHasPaid,
+  };
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && $("#supportOverlay")) hideSupport();
+  });
+  function closeBrowserTab(tabPage, button) {
+    const wasCurrent = tabPage === page(),
+      remaining = (S.tabs || []).filter((tab) => tab.p !== tabPage);
+    S.tabs = remaining;
+    save();
+    if (wasCurrent) {
+      const next = remaining[remaining.length - 1];
+      location.href = next?.u || "index.html";
+    } else {
+      button?.closest(".browser-tab-item")?.remove();
+    }
+  }
+  window.GoodWeatherBrowser = {
+    closeTab: (tabPage) => closeBrowserTab(tabPage),
+  };
   function targetPage(href = "") {
     if (
       !href ||
@@ -419,6 +714,7 @@
     document.body.className = `site-${page()} page-${page()}`;
     $("#app").innerHTML =
       `${browser()}<div class="site-window">${header()}<main class="site-main">${content}</main>${footer()}</div>`;
+    decorateJargon();
     const doSearch = (q) => {
       if (q.trim())
         location.href = "search.html?q=" + encodeURIComponent(q.trim());
@@ -443,6 +739,15 @@
     if (forward) forward.onclick = () => history.forward();
     const reload = $("#browserReload");
     if (reload) reload.onclick = () => location.reload();
+    $$("[data-close-tab]").forEach((button) => {
+      button.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeBrowserTab(button.dataset.closeTab, button);
+      };
+    });
+    const support = $("#browserSupport");
+    if (support) support.onclick = () => showSupport(false);
     const reset = $("#resetLocal");
     if (reset)
       reset.onclick = (e) => {
@@ -453,6 +758,7 @@
         }
       };
     decorateLinks();
+    maybeAutoSupport();
   }
   function fileIcon(kind, label) {
     return `<span class="file-icon ${kind}">${label}</span>`;
@@ -552,7 +858,7 @@
     return `<div class="drive-shell">${mailNav("shared")}<section class="drive-main"><div class="drive-top"><div><span class="crumb">云夹 / 与我共享</span><h1>共享给我的</h1></div><div class="drive-actions"><span>只读共享</span><span>列表视图</span></div></div><div class="drive-filter"><span class="active">全部</span><span>文档</span><span>图片</span><span>相册</span><span>最近修改</span></div><div class="drive-table"><div class="drive-row head"><span>名称</span><span>共享者</span><span>修改时间</span><span>大小</span></div>${files.map(([c, l, n, o, d, z, u]) => `<a class="drive-row" href="${u}"><span class="drive-name">${fileIcon(c, l)}<b>${n}</b></span><span>${o}</span><span>${d}</span><span>${z}</span></a>`).join("")}</div><div class="drive-info"><b>共享资料说明</b><p>共享文件由原所有者控制访问权限。移动、重命名或删除快捷方式不会影响原文件。</p></div></section></div>`;
   }
   function windowAlbum() {
-    return `<div class="drive-shell">${mailNav("shared")}<section class="album-main"><div class="album-head"><div><span class="crumb">云夹 / 共享相册</span><h1>到了就发窗户</h1><p>林沅创建 · 与周宁共享 · 3个时间节点</p></div><span class="album-sort">按拍摄时间</span></div><div class="album-gallery"><article>${photo("window-day2", "album-thumb")}<div><b>DAY2_老城民宿.jpg</b><span>08/15 21:08 · 已同步</span><p>“窗户外面全是坡和白房子。”</p></div></article><article>${photo("windows", "album-thumb")}<div><b>DAY5_白潮窗户.jpg</b><span>08/18 21:16 · 已同步</span><p>“明天去海边拍光。”</p></div></article><article class="album-missing-card"><div class="missing-frame"><span>DAY6</span><b>没有新照片</b></div><div><b>下一张窗户没有出现</b><span>最后同步后已超过24小时</span><p>相册没有删除记录，也没有新的上传失败提示。</p></div></article></div><div class="album-comment"><span class="avatar">林</span><p><b>林沅</b>：以后每换一家酒店就发一张窗户，不聊天也行。<br><small>三年前建立相册时的备注</small></p></div><div class="related-files"><b>这个相册附近共享的文件</b><a href="index.html?view=shared">栖岸行程与白潮团体确认</a></div></section></div>`;
+    return `<div class="drive-shell">${mailNav("shared")}<section class="album-main"><div class="album-head"><div><span class="crumb">云夹 / 共享相册</span><h1>到了就发窗户</h1><p>林沅创建 · 与周宁共享 · 3个时间节点</p></div><span class="album-sort">按拍摄时间</span></div><div class="album-gallery"><article>${photo("window-day2", "album-thumb")}<div><b>DAY2_老城民宿.jpg</b><span>08/15 21:08 · 已同步</span><p>“窗户外面全是坡和白房子。”</p></div></article><article class="album-uneasy">${photo("window-day5-figure", "album-thumb")}<div><b>DAY5_白潮窗户.jpg</b><span>08/18 21:16 · 已同步</span><p>“房务说进来换毛巾。手里那两条黑带子不知道是做什么的。”</p></div></article><article class="album-missing-card"><div class="missing-frame"><span>DAY6</span><b>没有新照片</b></div><div><b>下一张窗户没有出现</b><span>最后同步后已超过24小时</span><p>相册没有删除记录，也没有新的上传失败提示。</p></div></article></div><div class="album-comment"><span class="avatar">林</span><p><b>林沅</b>：以后每换一家酒店就发一张窗户，不聊天也行。<br><small>三年前建立相册时的备注</small></p></div><div class="related-files"><b>这个相册附近共享的文件</b><a href="index.html?view=shared">栖岸行程与白潮团体确认</a></div></section></div>`;
   }
   function luggageViewer() {
     return `<div class="drive-shell">${mailNav("shared")}<section class="album-main"><div class="album-head"><div><span class="crumb">云夹 / 照片 / 出发前</span><h1>行李称重_出发前.jpg</h1><p>林沅 · 08/13 19:22</p></div><a class="download-link" href="${PHOTO.luggage}" download="行李称重_出发前.webp">下载原图</a></div><div class="single-photo">${photo("luggage", "luggage-photo")}</div><div class="photo-details"><div><b>文件信息</b><p>JPG · 3024 × 4032 · 3.1 MB</p></div><div><b>共享备注</b><p>“黄色鸭子终于贴牢了，这次谁都别想把我箱子拿错。”</p></div><div><b>周宁</b><p>“你整个箱子都是黄色的。”</p></div></div></section></div>`;
@@ -696,7 +1002,13 @@
   function qianSupport() {
     visit("qian:support");
     const deep = S.deepConfirmed;
-    return `<div class="support-console"><aside class="ticket-list"><div class="support-title"><b>栖岸服务中心</b><span>周宁 · 我的工单</span></div><button class="new-ticket" disabled aria-disabled="true">已有进行中咨询</button><div class="ticket active"><span>行程中 · 进行中</span><b>无法联系团员 / 白潮酒店</b><small>工单 QN-260820-118</small></div><div class="ticket"><span>已结束</span><b>报名资料修改</b><small>08/14</small></div><div class="service-hours"><b>在线客服</b><p>08:00—23:30</p><span class="online-dot">在线</span></div></aside><section class="ticket-room"><header><div><span>工单 QN-260820-118</span><h1>无法联系团员 / 白潮酒店</h1></div><div class="ticket-state">等待核实</div></header><div class="ticket-context"><span><b>关联订单</b> ${esc(D.order.code)}</span><span><b>出行期次</b> 夏末特别期</span><span><b>服务对象</b> 林沅</span></div><div class="chat-log"><div class="bubble me"><small>周宁 · 08:21</small><p>林沅从昨晚开始联系不上。她现在是否还在白潮？</p></div><div class="bubble agent"><small>栖岸客服 · 08:27</small><p>林女士因当地网络条件暂时无法取得联系，团队工作人员已确认本人状态正常。</p><span>客服编号 QN-27</span></div>${deep ? `<div class="bubble agent alert-bubble"><small>栖岸客服 · 刚刚</small><p>周宁您好。请问您现在仍在查询林沅女士的行程吗？</p></div>` : ""}</div><form class="support-compose" id="supportForm"><textarea required minlength="8" aria-label="补充工单留言" placeholder="补充需要项目方核实的情况"></textarea><div><span>留言会进入普通售后工单；紧急安全问题请使用保险或当地正式渠道</span><button>发送</button></div><p id="supportMsg" class="form-feedback" aria-live="polite"></p></form></section><aside class="ticket-detail"><h3>工单信息</h3><dl><div><dt>优先级</dt><dd>普通</dd></div><div><dt>渠道</dt><dd>网页客服</dd></div><div><dt>创建</dt><dd>08/20 08:21</dd></div><div><dt>最近更新</dt><dd>08:27</dd></div></dl><h3>售后服务</h3><a href="qian-archive.html?code=${encodeURIComponent(D.order.code)}">订单与版本</a><a href="qian.html?view=faq">常见问题</a><a href="qian.html?view=refund">退款与退出</a><a href="qian.html?view=partners">合作机构</a></aside></div>`;
+    return `<div class="support-console"><aside class="ticket-list"><div class="support-title"><b>栖岸服务中心</b><span>周宁 · 我的工单</span></div><span class="new-ticket">已有进行中咨询</span><div class="ticket active"><span>行程中 · 进行中</span><b>无法联系团员 / 白潮酒店</b><small>工单 QN-260820-118</small></div><div class="ticket"><span>已结束</span><b>报名资料修改</b><small>08/14</small></div><div class="service-hours"><b>在线客服</b><p>08:00—23:30</p><span class="online-dot">在线</span></div></aside><section class="ticket-room"><header><div><span>工单 QN-260820-118</span><h1>无法联系团员 / 白潮酒店</h1></div><div class="ticket-state">等待核实</div></header><div class="ticket-context"><span><b>关联订单</b> ${esc(D.order.code)}</span><span><b>出行期次</b> 夏末特别期</span><span><b>服务对象</b> 林沅</span></div><div class="chat-log"><div class="bubble me"><small>周宁 · 08:21</small><p>林沅从昨晚开始联系不上。她现在是否还在白潮？</p></div><div class="bubble agent"><small>栖岸客服 · 08:27</small><p>林女士因当地网络条件暂时无法取得联系，团队工作人员已确认本人状态正常。</p><span>客服编号 QN-27</span></div>${deep ? `<div class="bubble agent alert-bubble"><small>栖岸运营 · 当前</small><p>如持有新的业务记录，可将材料转交原项目运营组统一核实。材料会同步给白潮酒店及合作供应商。</p></div>` : ""}</div>${deep ? `<div class="native-action-callout danger"><b>把材料交回原行程方</b><p>接收方是栖岸运营组。该渠道与白潮酒店、NIGHTPOST存在合作关系，不属于独立救援机构。</p><a href="qian.html?view=action">查看转交范围</a></div>` : `<div class="support-compose-static"><b>补充工单</b><p>普通售后工单不能代替当地报警或保险紧急援助。若继续无法联系旅行人，请先核实酒店正式退房记录。</p></div>`}</section><aside class="ticket-detail"><h3>工单信息</h3><dl><div><dt>优先级</dt><dd>普通</dd></div><div><dt>渠道</dt><dd>网页客服</dd></div><div><dt>创建</dt><dd>08/20 08:21</dd></div><div><dt>最近更新</dt><dd>08:27</dd></div></dl><h3>售后服务</h3><a href="qian-archive.html?code=${encodeURIComponent(D.order.code)}">订单与版本</a><a href="qian.html?view=faq">常见问题</a><a href="qian.html?view=refund">退款与退出</a><a href="qian.html?view=partners">合作机构</a></aside></div>`;
+  }
+  function qianAction() {
+    visit("qian:action");
+    if (!S.deepConfirmed)
+      return `<div class="final-channel locked-channel"><h1>行程材料转交</h1><p>当前工单尚无可以直接核对的运输记录。你可以先查询酒店住宿状态，或使用独立保险协助。</p><a href="hotel.html?view=group&code=${encodeURIComponent(D.hotel.groupCode)}">核对酒店状态</a></div>`;
+    return `<div class="final-channel qian-channel"><header><span>QIAN SERVICE / MATERIAL HANDOFF</span><h1>转交原项目运营组</h1><p>本页会把已经打开的业务资料直接附加到工单 QN-260820-118，无须重新输入编号或说明。</p></header><div class="recipient-warning"><b>接收范围</b><p>澄海国际文旅 / 栖岸运营组</p><small>材料可能同步给白潮酒店和NIGHTPOST合作人员。这不是独立求助渠道。</small></div>${finalPacket()}<form id="qianActionForm" class="final-confirm"><label><input type="checkbox" required> 我知道材料会交回原旅行项目及其合作方。</label><button>确认转交原项目方</button></form><a class="channel-back" href="nightpost-query.html?period=202608&code=NP-LY-B12">返回交接记录</a></div>`;
   }
   function qianDetail(id) {
     const x = D.qian.find((v) => v.id === id);
@@ -715,22 +1027,15 @@
     else if (v === "route") content = qianRoute();
     else if (v === "partners") content = qianPartners();
     else if (v === "support") content = qianSupport();
+    else if (v === "action") content = qianAction();
     else content = qianDetail(v);
     shell(content);
-    if (v === "support")
-      $("#supportForm").onsubmit = (e) => {
+    if (v === "action" && $("#qianActionForm"))
+      $("#qianActionForm").onsubmit = (e) => {
         e.preventDefault();
-        const msg = $("#supportForm textarea").value.trim();
-        if (msg.length < 8) return;
-        if (S.deepConfirmed) {
-          S.ending = "support";
-          save();
-          location.href = "ending.html";
-        } else {
-          $("#supportMsg").textContent =
-            "留言已进入原工单，客服会按普通售后流程继续核实。";
-          $("#supportForm textarea").value = "";
-        }
+        S.ending = "support";
+        save();
+        location.href = "ending.html";
       };
   }
   function qianArchive() {
@@ -849,7 +1154,7 @@
         norm(code) === norm(D.hotel.projectCode);
       if (ok) visit("hotel:pms");
       body = ok
-        ? `<div class="hotel-pms"><header><b>BAY TIDE PMS 3.4</b><span>GROUP SERVICE / READ ONLY</span><em>前台链接映射：${esc(D.hotel.groupCode)}</em></header><nav><span>房态</span><span>房务工单</span><span>服务区</span><span>附件</span></nav><main><section class="pms-summary"><h1>房务事件摘要 / 712</h1><table><tr><th>工单</th><td>HK-0819-712</td><th>状态</th><td class="pms-alert">夜间房务 · 暂挂</td></tr><tr><th>住客状态</th><td>前台未办理退房</td><th>交接区域</th><td>B2 SERVICE</td></tr><tr><th>供应商</th><td>NIGHTPOST</td><th>合作编号</th><td>${esc(D.nightpost.partner)}</td></tr></table></section><section class="pms-events"><h2>事件记录</h2><ol><li><time>22:20</time><p>前台收到团体房状态同步；房内无人应答。</p></li><li><time>22:23</time><p>房务进入712，发现住客行李仍在房内；未见本人。</p></li><li><time>22:26</time><p>工单被改为“夜间深清”，后续操作转交B2服务区。</p></li><li><time>22:31</time><p>附件2上传后，工单不再接受前台修改。</p></li></ol></section><section class="pms-attachments"><h2>房务附件（2）</h2><article>${photo("room-712-incident", "incident-photo")}<div><b>ATT-712-01 / 房务入室记录</b><p>空房内保留黄色硬壳行李箱与小鸭挂件；窗帘未关，房务车停在门口。</p><small>上传 22:24 · 设备 HK-03</small></div></article><article>${photo("b2-corridor-incident", "incident-photo")}<div><b>ATT-B2-04 / 后勤交接区域</b><p>服务车约束带已放下，湿轮迹从服务梯延伸至外包装卸门。</p><small>上传 22:31 · 设备 B2-02</small></div></article></section><div class="pms-foot"><p>该只读摘要通过团体住宿页面的旧链接映射开放；不包含证件、电话或门锁记录。</p><a href="hotel.html?view=supplier">供应商公示</a><a href="hotel.html?view=annex">采购附件</a></div></main></div>`
+        ? `<div class="hotel-pms"><header><b>BAY TIDE PMS 3.4</b><span>GROUP SERVICE / READ ONLY</span><em>前台链接映射：${esc(D.hotel.groupCode)}</em></header><nav><span>房态</span><span>房务工单</span><span>服务区</span><span>附件</span></nav><main><section class="pms-summary"><h1>房务事件摘要 / 712</h1><table><tr><th>工单</th><td>HK-0819-712</td><th>状态</th><td class="pms-alert">夜间深清 · 暂挂</td></tr><tr><th>住客状态</th><td>前台未办理退房</td><th>交接区域</th><td>B2 SERVICE</td></tr><tr><th>供应商</th><td>NIGHTPOST</td><th>合作编号</th><td>${esc(D.nightpost.partner)}</td></tr></table></section><section class="pms-events"><h2>事件记录</h2><ol><li><time>22:20</time><p>前台收到团体房状态同步；712房内无人应答，住客本人没有办理退房。</p></li><li><time>22:23</time><p>房务进入712。黄色行李箱、手机充电线与单只拖鞋仍在房内；房务车下层已经放置成人长度灰色包裹。</p></li><li><time>22:26</time><p>运营将住客字段转为“夜间深清”，要求不联系紧急联系人；灰色包裹交由B2处理。</p></li><li><time>22:31</time><p>B2上传第二张附件：三只成人长度运输袋，其中B12从内部压出手形。前台权限随即关闭。</p></li></ol></section><section class="pms-attachments"><h2>房务附件（2）</h2><article>${photo("room-712-incident", "incident-photo")}<div><b>ATT-712-01 / 712房入室记录</b><p>住客不在镜头中。黄色行李箱仍打开，充电线仍插着，地面只有一只拖鞋；房务车下层为成人长度包裹。</p><small>上传 22:24 · 设备 HK-03 · 未取得住客确认</small></div></article><article>${photo("b2-corridor-incident", "incident-photo")}<div><b>ATT-B2-04 / B12活体处置</b><p>三只运输袋停在地下通道；最近一只出现明确手部轮廓。记录注明“仍有呼吸”，约束带已经重新固定。</p><small>上传 22:31 · 设备 B2-02 · 禁止前台回退</small></div></article></section><div class="pms-horror-note"><b>夜班补充</b><p>对象途中两次出现自主活动。因呼吸仍在，不得使用标准封袋；夜班员工不得单独进入冷藏前室。</p></div><div class="pms-foot"><p>该只读摘要通过团体住宿页面的旧链接映射开放；不包含证件、电话或门锁记录。</p><a href="hotel.html?view=supplier">供应商公示</a><a href="hotel.html?view=annex">采购附件</a></div></main></div>`
         : `<div class="hotel-portal"><section><div class="portal-title"><span>PROPERTY MANAGEMENT</span><h1>关联房务摘要</h1><p>请从有效的团体住宿记录进入。</p></div><a class="hotel-text-link" href="hotel.html?view=group">返回团体入住查询</a></section></div>`;
     }
     if (v === "privacy")
@@ -857,7 +1162,7 @@
     if (v === "supplier")
       body = `<div class="hotel-legal"><aside><b>酒店信息</b><span class="active">供应商公示</span><a href="hotel.html?view=annex">历史采购附件</a><a href="hotel.html?view=back">B2后勤说明</a></aside><article><h1>夜间后勤供应商公示</h1><p>${D.hotel.supplierPublic}</p><div class="vendor-card"><div><b>NIGHTPOST 区域团队</b><span>夜间后勤 / 冷链 / 布草运输</span></div><a href="nightpost.html">供应商公开主页</a></div><h2>采购资料</h2><p>${D.hotel.supplierAnnex}</p><a class="hotel-text-link" href="hotel.html?view=annex">历史采购附件摘要</a></article></div>`;
     if (v === "annex")
-      body = `<div class="document-center"><aside><b>文档中心</b><span>采购 / 历史附件</span><a href="hotel.html?view=supplier">← 返回供应商公示</a></aside><article class="document-paper"><header><span>BAY TIDE HOTEL</span><small>采购部 · 历史供应商摘要</small></header><h1>夜间后勤供应商历史摘要</h1><table><tr><th>供应商</th><td>NIGHTPOST 区域团队</td></tr><tr><th>合作编号</th><td><b>${esc(D.nightpost.partner)}</b></td></tr><tr><th>结算方式</th><td>按月</td></tr><tr><th>具体账期</th><td>以当月结算文件为准</td></tr></table><p>本文件用于团体采购争议与历史结算核对。</p><div class="legacy-entry"><b>旧供应商查询</b><p>采购附件仍保留供应商迁移前的只读查询地址，合作编号会随链接带入。</p><a href="nightpost-query.html?partner=${encodeURIComponent(D.nightpost.partner)}">打开旧供应商查询</a></div><footer>白潮酒店采购部 · 归档副本</footer></article></div>`;
+      body = `<div class="document-center"><aside><b>文档中心</b><span>采购 / 历史附件</span><a href="hotel.html?view=supplier">← 返回供应商公示</a></aside><article class="document-paper"><header><span>BAY TIDE HOTEL</span><small>采购部 · 2026年08月结算摘要</small></header><h1>夜间后勤供应商历史摘要</h1><table><tr><th>供应商</th><td>NIGHTPOST 区域团队</td></tr><tr><th>合作编号</th><td><b>${esc(D.nightpost.partner)}</b></td></tr><tr><th>结算方式</th><td>按月</td></tr><tr><th>当前账期</th><td><b>202608</b></td></tr></table><p>本文件用于团体采购争议与历史结算核对。</p><div class="legacy-entry"><b>旧供应商查询</b><p>采购附件保留迁移前的只读查询地址；合作编号与当前账期已经随链接带入，不需要重新抄写。</p><a href="nightpost-query.html?partner=${encodeURIComponent(D.nightpost.partner)}&period=202608">打开2026年08月旧系统记录</a></div><footer>白潮酒店采购部 · 归档副本</footer></article></div>`;
     if (v === "back")
       body = `<div class="ops-page"><div class="ops-copy"><span>OPERATIONS / B2</span><h1>地下二层后勤通道</h1><p>${rich(D.hotel.back)}</p><dl><div><dt>住客权限</dt><dd>不开放</dd></div><div><dt>主要用途</dt><dd>布草 / 冷链 / 垃圾清运</dd></div><div><dt>夜间线路</dt><dd>B2-N / B2-L</dd></div></dl><p class="ops-note">普通前台只接收状态摘要，不显示夜间工单的客户自定义字段。</p></div>${photo("b2-corridor-incident", "ops-photo")}</div>`;
     shell(body);
@@ -975,7 +1280,7 @@
             x.id !== id && (x.section === a.section || x.section === "旅行"),
         ).slice(0, 4);
       shell(
-        `<div class="life-article-layout"><article class="life-article"><div class="life-path">首页 / ${esc(a.section)} / 正文</div>${a.sponsored ? '<span class="sponsored-badge">商业合作内容</span>' : ""}<h1>${esc(a.title)}</h1><p class="life-dek">${esc(a.dek)}</p><div class="life-by"><b>${esc(a.author)}</b><time>${esc(a.date)}</time><span>阅读约 6 分钟</span></div><div class="life-copy">${paras.map((p) => `<p>${rich(p)}</p>`).join("")}</div>${id === "l01" ? `<section class="travel-comparison"><header><span>SUMMER 2026</span><h2>七个项目怎么选</h2><p>以下为文章发布时的公开信息；最终价格和服务以项目报名页为准。</p></header>${D.lifestyle.travelPlans.map((x, i) => `<article class="${x.url ? "picked-plan" : ""}"><div class="plan-no">${String(i + 1).padStart(2, "0")}</div><div><h3>${esc(x.name)}</h3><p>${esc(x.fit)}</p><small>${esc(x.note)}</small></div><div><b>${esc(x.days)}</b><span>${esc(x.price)}</span>${x.url ? `<a href="${x.url}">查看项目公开页</a>` : ""}</div></article>`).join("")}</section><div class="life-disclosure"><b>合作内容说明</b><p>${esc(D.lifestyle.partner.disclosure)}</p><span>专题来源码 ${esc(D.lifestyle.partner.campaign)}</span></div>` : ""}<div class="life-actions"><span>收藏 128</span><span>分享</span><span>纠错</span></div></article><aside class="life-related"><h3>继续阅读</h3>${related.map((r) => `<a href="life.html?id=${r.id}"><span>${esc(r.section)} · ${esc(r.date)}</span><b>${esc(r.title)}</b></a>`).join("")}<div class="life-newsletter"><b>每周生活邮件</b><p>旅行、餐桌、城市和工作内容，每周三发送。</p><span>周宁 · 已订阅</span></div></aside></div>`,
+        `<div class="life-article-layout"><article class="life-article"><div class="life-path">首页 / ${esc(a.section)} / 正文</div>${a.sponsored ? '<span class="sponsored-badge">商业合作内容</span>' : ""}<h1>${esc(a.title)}</h1><p class="life-dek">${esc(a.dek)}</p><div class="life-by"><b>${esc(a.author)}</b><time>${esc(a.date)}</time><span>阅读约 6 分钟</span></div><div class="life-copy">${paras.map((p) => `<p>${rich(p)}</p>`).join("")}</div>${id === "l01" ? `<section class="life-incident"><span>往期项目活动图 / 运营方供图</span>${photo("life-corridor-anomaly", "life-incident-photo")}<h2>白潮酒店夜床服务</h2><p>拍摄期间，部分住客因行程调整提前离店。酒店已完成遗留物品的统一清理，未影响次日入住。</p><small>原图文件：BT_SUMMER_NIGHT_07.JPG · 图片说明由栖岸项目提供</small></section><section class="travel-comparison"><header><span>SUMMER 2026</span><h2>七个项目怎么选</h2><p>以下为文章发布时的公开信息；最终价格和服务以项目报名页为准。</p></header>${D.lifestyle.travelPlans.map((x, i) => `<article class="${x.url ? "picked-plan" : ""}"><div class="plan-no">${String(i + 1).padStart(2, "0")}</div><div><h3>${esc(x.name)}</h3><p>${esc(x.fit)}</p><small>${esc(x.note)}</small></div><div><b>${esc(x.days)}</b><span>${esc(x.price)}</span>${x.url ? `<a href="${x.url}">查看项目公开页</a>` : ""}</div></article>`).join("")}</section><div class="life-disclosure"><b>合作内容说明</b><p>${esc(D.lifestyle.partner.disclosure)}</p><span>专题来源码 ${esc(D.lifestyle.partner.campaign)}</span></div>` : ""}<div class="life-actions"><span>收藏 128</span><span>分享</span><span>纠错</span></div></article><aside class="life-related"><h3>继续阅读</h3>${related.map((r) => `<a href="life.html?id=${r.id}"><span>${esc(r.section)} · ${esc(r.date)}</span><b>${esc(r.title)}</b></a>`).join("")}<div class="life-newsletter"><b>每周生活邮件</b><p>旅行、餐桌、城市和工作内容，每周三发送。</p><span>周宁 · 已订阅</span></div></aside></div>`,
       );
       return;
     }
@@ -992,21 +1297,25 @@
     const id = qs("id"),
       v = qs("view"),
       sec = qs("section");
+    if (v === "action") {
+      visit("news:action");
+      if (!S.deepConfirmed) {
+        shell(`<div class="final-channel locked-channel"><h1>提交正在发生的事件</h1><p>编辑部需要能够定位到具体人员、地点和时间的公开记录。当前材料尚不足以启动夜间快讯。</p><a href="news.html?view=tip">返回材料说明</a></div>`);
+        return;
+      }
+      shell(`<div class="final-channel news-channel"><header><span>HAIWAN MORNING / NIGHT DESK</span><h1>发送至新闻值班室</h1><p>编辑部将以“正在发生的人身危险”接收材料，并可能立即公开机构、运单、现场附件与时间。</p></header><div class="recipient-public"><b>公开接收方</b><p>海湾晨报夜间值班室 / 调查编辑顾闻</p><small>材料可被警方、其他媒体和公众保存转发；林沅的私人物品可能出现在报道中。</small></div>${finalPacket()}<form id="newsActionForm" class="final-confirm"><label><input type="checkbox" required> 我知道公开可能救下林沅，也会永久暴露她最害怕的这个晚上。</label><button>将现有附件发送至值班室</button></form><a class="channel-back" href="nightpost-query.html?period=202608&code=NP-LY-B12">返回交接记录</a></div>`);
+      $("#newsActionForm").onsubmit = (e) => {
+        e.preventDefault();
+        S.ending = "expose";
+        save();
+        location.href = "ending.html";
+      };
+      return;
+    }
     if (v === "tip") {
       shell(
-        `<div class="news-submit"><header><span>READER TIP</span><h1>向编辑部提交材料</h1><p>可匿名提交公开网页、文件链接与事件说明。编辑会优先处理能够独立复核的材料。</p></header><div class="news-submit-grid"><form id="tipForm"><label>主题<input id="tipSubject" required value="栖岸旅居相关材料"></label><label>材料说明<textarea id="tipNote" required minlength="20" placeholder="写明你看到的公开页面、编号、时间以及它们为什么互相矛盾"></textarea></label><label>公开链接或页面名<input id="tipLink" required placeholder="例如某篇公开报道或企业查询页"></label><label>联系邮箱（可选）<input type="email" placeholder="用于编辑核实"></label><button>提交给编辑部</button><div id="tipMsg" class="form-feedback" aria-live="polite"></div></form><aside><b>提交说明</b><p>请勿上传护照、证件号码或非公开私人资料。</p><p>编辑部只会使用可以独立打开、搜索或向机构核实的来源。</p></aside></div></div>`,
+        `<div class="news-submit"><header><span>READER TIP</span><h1>向编辑部提交材料</h1><p>编辑会优先处理能够独立复核，并且涉及正在发生的人身危险的公开材料。</p></header><div class="news-submit-grid"><section class="tip-guide"><h2>夜间材料值守</h2><p>普通商业投诉进入次日邮箱；可以明确人员、地点和时间的紧急材料，由夜间值班编辑直接核实。</p><dl><div><dt>值班编辑</dt><dd>顾闻</dd></div><div><dt>值守时间</dt><dd>22:00—02:00</dd></div><div><dt>公开原则</dt><dd>先保护正在发生的人身安全，再处理隐私遮盖</dd></div></dl>${S.deepConfirmed ? `<div class="native-action-callout urgent"><b>当前材料符合夜间接收条件</b><p>B12记录已经包含活体状态、B2位置和00:20车辆时间，页面可自动附加全部资料。</p><a href="news.html?view=action">查看发送范围</a></div>` : `<p class="tip-pending">目前尚没有能够定位到具体位置和时间的记录。普通投诉不会触发即时报道。</p>`}</section><aside><b>提交说明</b><p>记者可能联系警方、当事机构和其他媒体交叉核实。</p><p>公开页面可能被复制保存，即使后续撤下也无法保证完全消失。</p></aside></div></div>`,
       );
-      $("#tipForm").onsubmit = (e) => {
-        e.preventDefault();
-        if (S.deepConfirmed) {
-          S.ending = "expose";
-          save();
-          location.href = "ending.html";
-        } else {
-          $("#tipMsg").textContent = "材料已进入编辑部材料邮箱。";
-          $("#tipForm").reset();
-        }
-      };
       return;
     }
     if (v === "attachment") {
@@ -1049,7 +1358,7 @@
     const v = qs("view") || "home";
     if (v === "home") {
       shell(
-        `<div class="ins-dashboard"><section class="policy-hero"><div><span>我的旅行保障</span><h1>境外旅行综合保障</h1><p>保单号 ${D.insurance.policy}</p><div class="policy-tags"><b>保障中</b><span>旅行人：${D.insurance.traveler}</span><span>第二紧急联系人：${D.insurance.contact}</span></div></div>${photo("flight", "policy-photo")}</section><section class="ins-actions"><a href="insurance.html?view=safety"><span>安全确认</span><b>当前有1项逾期确认</b><em>查看状态 →</em></a><a href="insurance.html?view=case"><span>境外协助</span><b>${S.caseCreated ? "协助单 AT-AID-0820" : "报告失联 / 医疗 / 证件问题"}</b><em>进入协助中心 →</em></a><a href="insurance.html?view=help"><span>帮助中心</span><b>了解援助范围与材料</b><em>阅读说明 →</em></a></section><section class="policy-info"><h2>保单摘要</h2><dl><div><dt>保障期间</dt><dd>2026-08-14 — 2026-08-23</dd></div><div><dt>旅行地区</dt><dd>境外海岸区</dd></div><div><dt>旅行人</dt><dd>林沅</dd></div><div><dt>紧急联系人</dt><dd>周宁</dd></div></dl></section></div>`,
+        `<div class="ins-dashboard"><section class="policy-hero"><div><span>我的旅行保障</span><h1>境外旅行综合保障</h1><p>保单号 ${D.insurance.policy}</p><div class="policy-tags"><b>保障中</b><span>旅行人：${D.insurance.traveler}</span><span>第二紧急联系人：${D.insurance.contact}</span></div></div>${photo("flight", "policy-photo")}</section><section class="ins-actions"><a href="insurance.html?view=safety"><span>安全确认</span><b>当前有1项逾期确认</b><em>查看状态 →</em></a><a href="insurance.html?view=case"><span>境外协助</span><b>协助单 AT-AID-0820</b><em>查看进度 →</em></a><a href="insurance.html?view=help"><span>帮助中心</span><b>了解援助范围与材料</b><em>阅读说明 →</em></a></section><section class="policy-info"><h2>保单摘要</h2><dl><div><dt>保障期间</dt><dd>2026-08-14 — 2026-08-23</dd></div><div><dt>旅行地区</dt><dd>境外海岸区</dd></div><div><dt>旅行人</dt><dd>林沅</dd></div><div><dt>紧急联系人</dt><dd>周宁</dd></div></dl></section></div>`,
       );
       return;
     }
@@ -1066,39 +1375,27 @@
       );
       return;
     }
-    const deep = S.deepConfirmed,
-      created = S.caseCreated;
-    visit("ins:case");
-    if (!created) {
-      shell(
-        `<div class="case-center"><aside><b>境外协助中心</b><span class="active">新建协助请求</span><a href="insurance.html?view=help">协助说明</a><small>24小时境外援助</small></aside><section><header><span>NEW ASSISTANCE CASE</span><h1>报告无法联系旅行人</h1><p>该表单由保单紧急联系人提交，后续信息由人工协助中心核实。</p></header><form id="caseForm" class="case-form"><label>旅行人<input value="林沅" readonly></label><label>保单号<input value="${D.insurance.policy}" readonly></label><label>最后可以确认联系的时间<input required value="2026-08-19 21:38"></label><label>最后已知住宿<input value="白潮酒店"></label><label class="wide">情况说明<textarea required minlength="6">自08/19晚间开始无法联系；项目方称工作人员已确认本人安全，但本人未完成安途安全确认。</textarea></label><label class="wide case-consent"><input type="checkbox" checked> 我确认以保单紧急联系人身份提交上述信息。</label><button class="wide">提交协助请求</button></form></section></div>`,
-      );
-      $("#caseForm").onsubmit = (e) => {
-        e.preventDefault();
-        S.caseCreated = true;
-        save();
-        location.reload();
-      };
-      return;
-    }
-    shell(
-      `<div class="case-center"><aside><b>境外协助中心</b><span class="active">AT-AID-0820</span><a href="insurance.html?view=help">协助说明</a><small>24小时境外援助</small></aside><section><header class="case-head"><div><span>CASE / AT-AID-0820</span><h1>旅行人无法联系</h1></div><em>已受理</em></header><div class="case-progress"><span class="done">请求提交</span><span class="active">补充位置</span><span>人工核验</span><span>当地协助</span></div><div class="case-note"><b>协助中心</b><p>现有信息只能确认旅行人曾在白潮区域活动。若你找到更具体、可以复核的公开记录，可以继续补充。</p></div><form id="updateForm" class="case-form"><label>最后已知地点<input required id="aidPlace" value="白潮酒店" placeholder="填写你已经核实到的位置"></label><label>相关业务记录<input required id="aidRefs" value="${D.order.code}" placeholder="可填写多个业务编号"></label><label class="wide">补充说明<textarea required minlength="20" id="aidNote" placeholder="写明最新状态、时间与来源"></textarea></label><p class="wide case-helper">人工坐席会根据你提交的地点、业务记录和最新状态自行交叉核验。不需要提交私人账号密码。</p><button class="wide">更新协助单</button><div id="aidMsg" class="wide form-feedback"></div></form></section></div>`,
-    );
-    $("#updateForm").onsubmit = (e) => {
-      e.preventDefault();
-      const note = $("#aidNote").value.trim();
-      if (!deep) {
-        $("#aidMsg").textContent = "补充信息已保存，人工坐席会继续核实。";
+    if (v === "action") {
+      visit("ins:action");
+      if (!S.deepConfirmed) {
+        shell(`<div class="final-channel locked-channel"><h1>紧急材料升级</h1><p>现有协助单还缺少可以定位到具体区域的业务记录。请先核对住宿与夜间交接信息。</p><a href="insurance.html?view=case">返回协助单</a></div>`);
         return;
       }
-      if (note.length >= 20) {
+      shell(
+        `<div class="final-channel insurance-channel"><header><span>AT EMERGENCY / PRIORITY ESCALATION</span><h1>升级为当地紧急协助</h1><p>材料将直接发送至安途24小时援助中心，并联系当地120与公共安全机构；不会先交回酒店或旅行项目。</p></header><div class="recipient-safe"><b>独立接收方</b><p>安途境外援助中心 / 当地公共安全渠道</p><small>预计在00:20车辆出场前完成第一次外部联络。</small></div>${finalPacket()}<form id="insuranceActionForm" class="final-confirm"><label><input type="checkbox" required> 我确认以保单第二紧急联系人身份发起紧急协助。</label><button>立即升级AT-AID-0820</button></form><a class="channel-back" href="nightpost-query.html?period=202608&code=NP-LY-B12">返回交接记录</a></div>`,
+      );
+      $("#insuranceActionForm").onsubmit = (e) => {
+        e.preventDefault();
         S.ending = "rescue";
         save();
         location.href = "ending.html";
-      } else {
-        $("#aidMsg").textContent = "请补充最新状态与信息来源。";
-      }
-    };
+      };
+      return;
+    }
+    visit("ins:case");
+    shell(
+      `<div class="case-center"><aside><b>境外协助中心</b><span class="active">AT-AID-0820</span><a href="insurance.html?view=help">协助说明</a><small>24小时境外援助</small></aside><section><header class="case-head"><div><span>CASE / AT-AID-0820</span><h1>旅行人无法联系</h1></div><em>已受理</em></header><div class="case-progress"><span class="done">基础失联报告</span><span class="active">等待具体位置</span><span>当地协助</span></div><div class="case-note"><b>已由安全确认逾期自动建立</b><p>旅行人林沅自08月19日21:38后无法联系，已登记设备仍在白潮住客网关出现，但本人没有完成安全确认。基础信息无需再次填写。</p></div><section class="case-known"><h2>当前可以核实的内容</h2><dl><div><dt>保单</dt><dd>${esc(D.insurance.policy)}</dd></div><div><dt>住宿</dt><dd>白潮酒店 / 团体确认 ${esc(D.hotel.groupCode)}</dd></div><div><dt>本人确认</dt><dd>未收到</dd></div><div><dt>具体位置</dt><dd>${S.deepConfirmed ? "白潮B2 / NP-LY-B12" : "尚未核实"}</dd></div></dl></section>${S.deepConfirmed ? `<div class="native-action-callout urgent"><b>已经找到可以定位的活体交接记录</b><p>保险系统可自动带入B2位置、运单、图片和00:20时间，不需要再写情况说明。</p><a href="insurance.html?view=action">升级为当地紧急协助</a></div>` : `<div class="case-wait"><p>若找到酒店正式退房、房务摘要或运输记录，可从原页面直接转入本协助单。</p><a href="hotel.html?view=group&code=${encodeURIComponent(D.hotel.groupCode)}">核对酒店住宿状态</a></div>`}</section></div>`,
+    );
   }
   function nightpost() {
     visit("night:home");
@@ -1117,6 +1414,23 @@
     const n = norm(x),
       m = n.match(/(20\d{2})(0[1-9]|1[0-2])/);
     return m ? m[1] + m[2] : "";
+  }
+  function currentRecordView(x) {
+    const logs = (narrative().currentLog || [])
+      .map(
+        ([time, entry]) =>
+          `<article class="${time === "00:20" ? "deadline" : ""}"><time>${esc(time)}</time><p>${rich(entry)}</p></article>`,
+      )
+      .join("");
+    return `<div class="np-critical"><b>活体交接记录</b><p>该对象不是遗体，也不是普通行李。系统记录其仍有呼吸、能够说话，并将在00:20被车辆带离酒店。</p></div>
+      <div class="handover-photo"><span>ATTACHMENT / HANDOVER AUDIT</span>${photo("nightpost-handover", "handover-image")}<div><b>B12称重交接附件</b><p>成人运输袋在称重时出现活动；拉链处夹有长发，袋面留下从内部向外的手形。旁边的黄色行李箱来自712房。</p><small>拍摄设备 NP-GATE-02 · 23:21 · 禁止展示面部</small></div></div>
+      <table class="handover-spec"><thead><tr><th>项目</th><th>重量</th><th>系统分类</th><th>当前状态</th></tr></thead><tbody><tr><td>B12-A / 黄色行李箱</td><td>18.6kg</td><td>随人物品</td><td>已称重</td></tr><tr class="human-row"><td>B12-B / 成人形运输袋</td><td>52.4kg</td><td>活体</td><td>仍有呼吸 / 等待换站</td></tr></tbody></table>
+      <table><tr><th>Class</th><td>${rich(x.class)}</td><th>Route</th><td>${rich(x.route)}</td></tr><tr><th>Origin reference</th><td>${esc(x.origin)}</td><th>Receiver</th><td>${rich(x.receiver || "—")}</td></tr><tr><th>Processing</th><td colspan="3">${rich(x.processing || "—")}</td></tr></table>
+      <section class="current-operation"><header><b>CURRENT OPERATION LOG</b><span>不可回写</span></header>${logs}</section>
+      <div class="live-manifest"><b>ORIGIN MAPPING</b><p>${esc(x.origin)} → ${esc(x.code)}</p><span>当前记录时间 ${D.timeline.now}</span><span>计划换站 ${D.timeline.transfer}</span></div>
+      <section class="victim-draft"><div><small>PHONE CACHE / UNSENT</small><b>林沅 · 未发送草稿</b><p>${esc(narrative().victimDraft)}</p></div>${photo("window-day5-figure", "victim-window")}</section>
+      <div class="leader-draft"><small>UNSENT / INTERNAL NOTE</small><b>韩译</b><p>${rich(narrative().leaderDraft)}</p></div>
+      <section class="final-decision"><header><span>00:20以前</span><h2>把已经确认的情况交给谁</h2><p>以下都是此前出现过的真实业务渠道。姓名、房号、B2位置、运单和附件会自动带入，不需要输入编号、拼接关键词或重新写情况说明。</p></header><div><a class="to-insurance" href="insurance.html?view=action"><b>安途24小时境外援助</b><p>独立于酒店和旅行项目，可联系当地公共安全机构；林沅的资料不会先公开。</p><span>查看紧急升级范围 →</span></a><a class="to-news" href="news.html?view=action"><b>海湾晨报夜间值班室</b><p>可以最快形成公共关注，但房间与交接图片可能永久留在网络上。</p><span>查看公开范围 →</span></a><a class="to-qian" href="qian.html?view=action"><b>栖岸原项目运营组</b><p>最熟悉行程，却与白潮和NIGHTPOST共享运营记录；材料会回到同一套系统。</p><span>查看转交范围 →</span></a></div></section>`;
   }
   function nightQuery() {
     visit("night:query");
@@ -1168,7 +1482,7 @@
       }
       const isLY = currentRecord && norm(code) === norm(currentRecord.code);
       shell(
-        `<div class="manifest-detail"><div class="np-breadcrumb"><a href="nightpost-query.html?period=${active}">${active} records</a> / ${esc(x.code)}</div><header><div><span>SHIPMENT RECORD</span><h1>${esc(x.code)}</h1></div><em class="${isLY ? "live-state" : ""}">${rich(x.state)}</em></header>${isLY ? `<div class="handover-photo"><span>ATTACHMENT / HANDOVER AUDIT</span>${photo("nightpost-handover", "handover-image")}<div><b>附件与来源酒店房务记录使用同一只黄色行李箱</b><p>外箱贴：黄色鸭子挂件；交接区域：B2；拍摄设备：NP-GATE-02。</p><small>平台未提供住客本人授权或正式退房凭证。</small></div></div>` : ""}<table><tr><th>Class</th><td>${rich(x.class)}</td><th>Route</th><td>${rich(x.route)}</td></tr><tr><th>Origin reference</th><td>${esc(x.origin)}</td><th>Receiver</th><td>${rich(x.receiver || "—")}</td></tr><tr><th>Processing</th><td colspan="3">${rich(x.processing || "—")}</td></tr></table>${isLY ? `<div class="live-manifest"><b>ORIGIN MAPPING</b><p>${esc(x.origin)} → ${esc(x.code)}</p><span>当前记录时间 ${D.timeline.now}</span><span>计划换站 ${D.timeline.transfer}</span></div><div class="leader-draft"><small>UNSENT / INTERNAL NOTE</small><b>韩译</b><p>${rich(narrative().leaderDraft)}</p></div>` : ""}<div class="np-record-actions"><a href="nightpost-query.html?period=${active}">← 返回运单列表</a>${x.origin === D.order.code ? `<a href="qian-archive.html?code=${encodeURIComponent(x.origin)}">打开来源订单</a>` : ""}</div></div>`,
+        `<div class="manifest-detail"><div class="np-breadcrumb"><a href="nightpost-query.html?period=${active}">${active} records</a> / ${esc(x.code)}</div><header><div><span>SHIPMENT RECORD</span><h1>${esc(x.code)}</h1></div><em class="${isLY ? "live-state" : ""}">${rich(x.state)}</em></header>${isLY ? currentRecordView(x) : ""}${!isLY ? `<table><tr><th>Class</th><td>${rich(x.class)}</td><th>Route</th><td>${rich(x.route)}</td></tr><tr><th>Origin reference</th><td>${esc(x.origin)}</td><th>Receiver</th><td>${rich(x.receiver || "—")}</td></tr><tr><th>Processing</th><td colspan="3">${rich(x.processing || "—")}</td></tr></table>` : ""}<div class="np-record-actions"><a href="nightpost-query.html?period=${active}">← 返回运单列表</a>${x.origin === D.order.code ? `<a href="qian-archive.html?code=${encodeURIComponent(x.origin)}">打开来源订单</a>` : ""}</div></div>`,
       );
       return;
     }
@@ -1416,17 +1730,23 @@
         voice.requires.every((visit) => S.visits.includes(visit)),
       ),
       intimate =
+        type !== "support" &&
         S.visits.includes("mail:window-memory") &&
         S.visits.includes("forum:f03"),
-      artifactVisual =
-        type === "rescue"
-          ? `${photo("windows", "ending-photo")}<small>临时住处 / 09月04日</small>`
-          : type === "expose"
-            ? `${photo("nightpost-handover", "ending-photo")}<small>公开附件副本 / 隐私字段已遮盖</small>`
-            : '<div class="status-paper"><span>栖岸参与者状态</span><b>LY / 已中止换线</b><em>LAST SYNC 23:43</em></div>';
+      stages = e.stages || [],
+      endingImage =
+        e.image && PHOTO[e.image]
+          ? `<a class="attachment-open" href="${PHOTO[e.image]}" target="_blank" rel="noopener" aria-label="查看结局附件：${esc(PHOTO_ALT[e.image])}"><img class="ending-photo" src="${PHOTO[e.image]}" alt="${esc(PHOTO_ALT[e.image])}" loading="lazy" onerror="this.closest('figure').classList.add('photo-error')"></a>`
+          : "";
     shell(
-      `<div class="ending-screen ${esc(type)}"><span>${esc(e.eyebrow)}</span><h1>${esc(e.title)}</h1><p>${esc(e.intro)}</p><blockquote>${esc(e.quote)}</blockquote><div class="ending-message"><small>${esc(e.messageTitle)}</small><b>${esc(e.speaker || "林沅")}</b>${e.messages.map((x) => `<p>${esc(x)}</p>`).join("")}</div>${e.followup ? `<div class="ending-message ending-followup"><small>稍后收到</small><b>林沅</b><p>${esc(e.followup)}</p></div>` : ""}<div class="ending-artifact ${esc(type)}-artifact"><div>${artifactVisual}</div><section><small>这条路留下的东西</small><b>${esc(e.artifactTitle)}</b><p>${esc(e.artifactText)}</p></section></div><div class="ending-consequence"><b>这条路留下的结果</b><p>${esc(e.consequence)}</p></div>${caseVoices.length ? `<section class="ending-voices"><small>你读过的名字，后来仍在网上留下这些</small>${caseVoices.map((voice) => `<article><b>${esc(voice.title)}</b><p>${esc(voice.text)}</p></article>`).join("")}</section>` : ""}${intimate ? `<div class="ending-epilogue"><small>一年后</small><p>${esc(narrative().intimate)}</p></div>` : ""}<div class="ending-actions"><a href="index.html">回到邮箱</a><a href="#" id="endingReset">重新开始</a></div></div>`,
+      `<div class="ending-screen ${esc(type)}"><header class="ending-lead"><span>${esc(e.eyebrow)}</span><h1>${esc(e.title)}</h1><p>${esc(e.intro)}</p><blockquote>${esc(e.quote)}</blockquote></header><figure class="ending-scene">${endingImage}<figcaption>${esc(e.imageCaption || "结局附件")}</figcaption></figure><section class="ending-timeline"><h2>这一条路后来发生的事</h2>${stages.map(([time, title, copy]) => `<article><time>${esc(time)}</time><div><b>${esc(title)}</b><p>${esc(copy)}</p></div></article>`).join("")}</section><div class="ending-message"><small>${esc(e.messageTitle)}</small><b>${esc(e.speaker || "林沅")}</b>${(e.messages || []).map((x) => `<p>${esc(x)}</p>`).join("")}</div><div class="ending-artifact ${esc(type)}-artifact"><section><small>这条路留下的东西</small><b>${esc(e.artifactTitle)}</b><p>${esc(e.artifactText)}</p></section></div><div class="ending-consequence"><b>这条路留下的结果</b><p>${esc(e.consequence)}</p></div>${caseVoices.length ? `<section class="ending-voices"><small>你读过的名字，后来仍在网上留下这些</small>${caseVoices.map((voice) => `<article><b>${esc(voice.title)}</b><p>${esc(voice.text)}</p></article>`).join("")}</section>` : ""}${intimate ? `<div class="ending-epilogue"><small>一年后</small><p>${esc(narrative().intimate)}</p></div>` : ""}<div class="ending-actions"><a href="#" id="endingReplay">回到00:20以前</a><a href="#" id="endingReset">清除记录并重新开始</a></div></div>`,
     );
+    $("#endingReplay").onclick = (event) => {
+      event.preventDefault();
+      delete S.ending;
+      save();
+      location.href = "nightpost-query.html?period=202608&code=NP-LY-B12";
+    };
     $("#endingReset").onclick = (event) => {
       event.preventDefault();
       STORE.removeItem(KEY);
